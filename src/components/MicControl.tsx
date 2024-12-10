@@ -2,16 +2,70 @@ import React, { useState, useCallback, useRef } from 'react'
 import { Mic, MicOff } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 
-interface MicControlProps {
-  onSpeechResult: (text: string) => void;
+interface SpeechRecognitionEvent {
+    results: {
+        [index: number]: {
+            0: {
+                transcript: string;
+            };
+            isFinal: boolean;
+            length: number;
+        };
+        length: number;
+    };
+    resultIndex: number;
 }
 
-export default function MicControl({ onSpeechResult }: MicControlProps) {
+interface SpeechRecognition extends EventTarget {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: (event: SpeechRecognitionEvent) => void;
+    onerror: (event: any) => void;
+    onend: () => void;
+    start: () => void;
+    stop: () => void;
+}
+
+declare global {
+    interface Window {
+        SpeechRecognition: new () => SpeechRecognition;
+        webkitSpeechRecognition: new () => SpeechRecognition;
+    }
+}
+
+interface MicControlProps {
+  onSpeechResult: (text: string) => void;
+  onListeningChange?: (isListening: boolean) => void;
+}
+
+export default function MicControl({ onSpeechResult, onListeningChange }: MicControlProps) {
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const lastProcessedTextRef = useRef<string>("")
+
+  const updateListeningState = useCallback((listening: boolean) => {
+    setIsListening(listening)
+    onListeningChange?.(listening)
+    if (!listening) {
+      lastProcessedTextRef.current = ""
+    }
+  }, [onListeningChange])
+
+  const processTranscript = useCallback((transcript: string) => {
+    // Clean up the transcript
+    const cleanTranscript = transcript.trim().toLowerCase()
+    
+    // Only process if we have new content
+    if (cleanTranscript && cleanTranscript !== lastProcessedTextRef.current) {
+      lastProcessedTextRef.current = cleanTranscript
+      onSpeechResult(cleanTranscript)
+    }
+  }, [onSpeechResult])
 
   const startListening = useCallback(() => {
-    setIsListening(true)
+    updateListeningState(true)
+    lastProcessedTextRef.current = ""
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) {
@@ -20,67 +74,61 @@ export default function MicControl({ onSpeechResult }: MicControlProps) {
     }
 
     const recognition = new SpeechRecognition()
-    recognitionRef.current = recognition
-
-    recognition.lang = 'en-US'
-    recognition.interimResults = true
     recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
 
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join(' ')
-
-      onSpeechResult(transcript)
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const result = event.results[event.resultIndex]
+      if (result) {
+        const transcript = result[0].transcript
+        // Only process if this is a final result or it's a new interim result
+        if (result.isFinal || transcript.trim() !== lastProcessedTextRef.current) {
+          processTranscript(transcript)
+        }
+      }
     }
 
     recognition.onerror = (event) => {
-      console.error('Speech recognition error', event.error)
-      setIsListening(false)
+      console.error('Speech recognition error:', event)
+      updateListeningState(false)
     }
 
     recognition.onend = () => {
       if (isListening) {
+        // Restart if we're still supposed to be listening
         recognition.start()
+      } else {
+        updateListeningState(false)
       }
     }
 
+    recognitionRef.current = recognition
     recognition.start()
-  }, [onSpeechResult, isListening])
+  }, [isListening, processTranscript, updateListeningState])
 
   const stopListening = useCallback(() => {
-    setIsListening(false)
     if (recognitionRef.current) {
       recognitionRef.current.stop()
+      updateListeningState(false)
     }
-  }, [])
-
-  const toggleListening = () => {
-    if (isListening) {
-      stopListening()
-    } else {
-      startListening()
-    }
-  }
+  }, [updateListeningState])
 
   return (
-    <Button 
-      onClick={toggleListening} 
-      variant={isListening ? "destructive" : "outline"}
-      className={`w-full flex items-center justify-center gap-2 ${
-        isListening ? 'text-destructive-foreground' : 'text-muted-foreground'
-      }`}
-      aria-label={isListening ? "Stop listening" : "Start listening"}
+    <Button
+      onClick={isListening ? stopListening : startListening}
+      variant={isListening ? "destructive" : "default"}
+      className="w-full max-w-xs mx-auto flex items-center justify-center gap-2"
     >
       {isListening ? (
         <>
-          <MicOff className="h-5 w-5" />
-          Stop Listening
+          <MicOff className="w-4 h-4" />
+          Stop Reading
         </>
       ) : (
         <>
-          <Mic className="h-5 w-5" />
-          Start Listening
+          <Mic className="w-4 h-4" />
+          Start Reading
         </>
       )}
     </Button>
