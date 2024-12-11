@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent } from "@/components/ui/card"
 import { levenshteinDistance2 } from '@/lib/calculateMatch'
 import { Button } from "@/components/ui/button"
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, Star } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // Types and Interfaces
 interface Word {
@@ -36,6 +37,24 @@ const similarSoundingWords: { [key: string]: string[] } = {
   'hear': ['here']
 }
 
+// Feedback messages for different scenarios
+const feedbackMessages = {
+  great: [
+    "Amazing! 🌟",
+    "Fantastic job! 🎉",
+    "You're a star! ⭐",
+    "Keep it up! 🚀",
+    "Wonderful! 🌈"
+  ],
+  good: [
+    "Good try! 👍",
+    "Almost there! 💫",
+    "Keep going! 🌟",
+    "You can do it! 💪",
+    "Nice effort! 🌅"
+  ]
+}
+
 export default function TextDisplay({ 
   textToRead = "Sample text", 
   spokenText = "",
@@ -45,6 +64,9 @@ export default function TextDisplay({
   const [words, setWords] = useState<Word[]>([])
   const [currentWordIndex, setCurrentWordIndex] = useState<number>(0)
   const [lastProcessedText, setLastProcessedText] = useState("")
+  const [feedback, setFeedback] = useState<string>("")
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [streak, setStreak] = useState(0)
   const [progress, setProgress] = useState(0)
 
   // Utility Functions
@@ -97,6 +119,14 @@ export default function TextDisplay({
     return nextIndex
   }, [])
 
+  const showRandomFeedback = (isCorrect: boolean) => {
+    const messages = isCorrect ? feedbackMessages.great : feedbackMessages.good
+    const randomMessage = messages[Math.floor(Math.random() * messages.length)]
+    setFeedback(randomMessage)
+    setShowFeedback(true)
+    setTimeout(() => setShowFeedback(false), 2000)
+  }
+
   // Effects
   useEffect(() => {
     if (!textToRead) return
@@ -140,7 +170,6 @@ export default function TextDisplay({
       const normalizedCurrentWord = normalizeText(currentWord.text)
       const normalizedSpokenWord = normalizeText(currentSpokenWord)
       
-      // Check for similar-sounding words
       const similarWords = similarSoundingWords[normalizedCurrentWord] || []
       const isSimilarSoundingWord = similarWords.includes(normalizedSpokenWord)
 
@@ -152,9 +181,15 @@ export default function TextDisplay({
         currentWord.confidence = isSimilarSoundingWord ? 100 : confidence
         const nextIndex = moveToNextWord(newWords, currentWordIndex)
         setCurrentWordIndex(nextIndex)
+        setStreak(prev => prev + 1)
+        if (streak >= 2) {
+          showRandomFeedback(true)
+        }
       } else if (currentSpokenWord.length >= currentWord.text.length) {
         currentWord.status = 'incorrect'
         currentWord.confidence = confidence
+        setStreak(0)
+        showRandomFeedback(false)
       } else {
         currentWord.status = 'current'
         currentWord.confidence = confidence
@@ -172,7 +207,7 @@ export default function TextDisplay({
 
   // Styling
   const getWordStyle = (word: Word) => {
-    const baseStyle = 'px-3 py-2 rounded-lg mx-1 transition-all duration-300 relative '
+    const baseStyle = 'px-3 py-2 rounded-lg mx-1 transition-all duration-300 '
     
     if (word.isPunctuation) {
       return baseStyle + (word.status === 'correct' ? 'text-green-500' : 'text-gray-400')
@@ -219,9 +254,21 @@ export default function TextDisplay({
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto shadow-lg">
+    <Card className="w-full max-w-4xl mx-auto shadow-lg relative overflow-hidden">
       <CardContent className="p-8">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            {Array.from({ length: Math.min(streak, 5) }).map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="text-yellow-400"
+              >
+                <Star className="w-6 h-6 fill-current" />
+              </motion.div>
+            ))}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -229,12 +276,26 @@ export default function TextDisplay({
             className="flex items-center gap-2"
           >
             <RotateCcw className="w-4 h-4" />
-            Reset
+            Start Over
           </Button>
         </div>
-        <div className="text-2xl leading-relaxed text-center">
+
+        <AnimatePresence>
+          {showFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 px-6 py-3 rounded-full shadow-lg text-2xl font-bold text-center z-10"
+            >
+              {feedback}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="text-3xl leading-relaxed text-center font-rounded">
           {words.map((word, index) => (
-            <span 
+            <motion.span 
               key={index} 
               className={getWordStyle(word)}
               style={{
@@ -243,18 +304,33 @@ export default function TextDisplay({
                 position: 'relative',
                 margin: '0 4px'
               }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
               {word.text}
               {!word.isPunctuation && " "}
               {word.status === 'current' && isListening && !word.isPunctuation && (
-                <span className="absolute -bottom-1 left-0 w-full h-1 bg-yellow-400 animate-pulse" />
+                <motion.span 
+                  className="absolute -bottom-1 left-0 w-full h-1 bg-yellow-400"
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                />
               )}
               {(word.status === 'correct' || word.status === 'incorrect') && !word.isPunctuation && (
-                <span style={getConfidenceStyle(word.status)}>
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-3 right-0 text-xs px-2 py-1 rounded-full font-bold"
+                  style={{
+                    backgroundColor: word.status === 'correct' ? '#22c55e' : '#ef4444',
+                    color: 'white',
+                    fontSize: '0.65em'
+                  }}
+                >
                   {Math.round(word.confidence)}%
-                </span>
+                </motion.span>
               )}
-            </span>
+            </motion.span>
           ))}
         </div>
       </CardContent>
