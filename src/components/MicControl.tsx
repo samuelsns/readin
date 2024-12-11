@@ -1,45 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { Mic, MicOff } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { SpeechRecognitionEvent, SpeechRecognition } from '../types/speechRecognition';
 
-interface SpeechRecognitionEvent {
-    results: {
-        [index: number]: {
-            0: {
-                transcript: string;
-            };
-            isFinal: boolean;
-            length: number;
-        };
-        length: number;
-    };
-    resultIndex: number;
-}
-
-interface SpeechRecognition extends EventTarget {
-    continuous: boolean;
-    interimResults: boolean;
-    lang: string;
-    onresult: (event: SpeechRecognitionEvent) => void;
-    onerror: (event: any) => void;
-    onend: () => void;
-    start: () => void;
-    stop: () => void;
-}
-
-declare global {
-    interface Window {
-        SpeechRecognition: new () => SpeechRecognition;
-        webkitSpeechRecognition: new () => SpeechRecognition;
-    }
-}
-
-interface MicControlProps {
-  onSpeechResult: (text: string) => void;
-  onListeningChange?: (isListening: boolean) => void;
-}
-
-export default function MicControl({ onSpeechResult, onListeningChange }: MicControlProps) {
+export default function MicControl({ onSpeechResult, onListeningChange }: { onSpeechResult: (text: string) => void; onListeningChange?: (isListening: boolean) => void }) {
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const lastProcessedTextRef = useRef<string>("")

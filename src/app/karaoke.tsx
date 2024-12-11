@@ -1,41 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { SpeechRecognitionEvent, SpeechRecognition } from '../types/speechRecognition';
 
 declare global {
     interface Window {
         SpeechRecognition: new () => SpeechRecognition;
         webkitSpeechRecognition: new () => SpeechRecognition;
     }
-}
-
-interface SpeechRecognitionEvent {
-    results: {
-        [index: number]: {
-            0: {
-                transcript: string;
-            };
-            isFinal: boolean;
-            length: number;
-        };
-        length: number;
-    };
-    resultIndex: number;
-}
-
-interface SpeechRecognition extends EventTarget {
-    continuous: boolean;
-    interimResults: boolean;
-    lang: string;
-    onresult: (event: SpeechRecognitionEvent) => void;
-    onerror: (event: any) => void;
-    onend: () => void;
-    start: () => void;
-    stop: () => void;
 }
 
 function Karaoke() {
