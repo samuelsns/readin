@@ -4,6 +4,7 @@ import { levenshteinDistance2 } from '@/lib/calculateMatch'
 import { Button } from "@/components/ui/button"
 import { RotateCcw, Star } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { DifficultyLevel, getTextByDifficulty, getTextCount, feedbackMessages } from '@/types/displayTexts'
 
 // Types and Interfaces
 interface Word {
@@ -17,7 +18,7 @@ interface TextDisplayProps {
   textToRead: string
   spokenText: string
   isListening?: boolean
-  difficulty?: 'beginner' | 'learning' | 'expert'
+  difficulty?: DifficultyLevel
 }
 
 // Map of similar-sounding words
@@ -40,31 +41,6 @@ const similarSoundingWords: { [key: string]: string[] } = {
   'three': ['tree']
 }
 
-// Feedback messages for different scenarios
-const feedbackMessages = {
-  great: [
-    "Amazing! 🌟",
-    "Fantastic job! 🎉",
-    "You're a star! ⭐",
-    "Keep it up! 🚀",
-    "Wonderful! 🌈"
-  ],
-  good: [
-    "Good try! 👍",
-    "Almost there! 💫",
-    "Keep going! 🌟",
-    "You can do it! 💪",
-    "Nice effort! 🌅"
-  ]
-}
-
-// Predefined content for different difficulty levels
-const difficultyContent = {
-  beginner: 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z',
-  learning: 'Apple Ball Cat Dog Elephant Fish Game House Ice Juice King Lion Moon Nest Orange Pen Queen Rain Sun Tree Umbrella Van Water Xray Yellow Zoo',
-  expert: ''  // Will use the provided textToRead
-}
-
 export default function TextDisplay({ 
   textToRead = "Sample text", 
   spokenText = "",
@@ -79,6 +55,7 @@ export default function TextDisplay({
   const [showFeedback, setShowFeedback] = useState(false)
   const [streak, setStreak] = useState(0)
   const [progress, setProgress] = useState(0)
+  const [textIndex, setTextIndex] = useState(0)
 
   // Utility Functions
   const isPunctuation = useCallback((word: string) => (
@@ -95,17 +72,19 @@ export default function TextDisplay({
 
   // Get the appropriate text based on difficulty
   const getDisplayText = useCallback(() => {
-    if (difficulty === 'expert') return textToRead
-    const text = difficultyContent[difficulty]
-    if (difficulty === 'beginner') {
-      return text.toUpperCase()
-    } else if (difficulty === 'learning') {
-      return text.split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-      ).join(' ')
-    }
-    return text
-  }, [difficulty, textToRead])
+    return getTextByDifficulty(difficulty, textIndex)
+  }, [difficulty, textIndex])
+
+  // Handle text swap
+  const handleSwapText = useCallback(() => {
+    const maxTexts = getTextCount(difficulty)
+    setTextIndex(prev => (prev + 1) % maxTexts)
+    setWords([])
+    setCurrentWordIndex(0)
+    setLastProcessedText("")
+    setStreak(0)
+    setProgress(0)
+  }, [difficulty])
 
   // Reset Function
   const handleReset = useCallback(() => {
@@ -303,29 +282,33 @@ export default function TextDisplay({
 
   return (
     <Card className="w-full max-w-4xl mx-auto shadow-lg relative overflow-hidden">
-      <CardContent className="p-8">
-        <div className="flex justify-between items-center mb-6">
+      <CardContent className="p-6">
+        <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
-            {Array.from({ length: Math.min(streak, 5) }).map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="text-yellow-400"
-              >
-                <Star className="w-6 h-6 fill-current" />
-              </motion.div>
-            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              className="flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Start Over
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSwapText}
+              className="flex items-center gap-2"
+            >
+              <Star className="w-4 h-4" />
+              Next Text ({textIndex + 1}/{getTextCount(difficulty)})
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReset}
-            className="flex items-center gap-2"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Start Over
-          </Button>
+          {progress > 0 && (
+            <div className="text-sm font-medium text-gray-500">
+              Progress: {Math.round(progress * 100)}%
+            </div>
+          )}
         </div>
 
         <AnimatePresence>
