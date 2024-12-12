@@ -1,72 +1,88 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { SpeechRecognitionEvent, SpeechRecognition } from '../types/speechRecognition';
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
-
-// Configuration options (optional)
-recognition.continuous = true; // Keep listening even after a result
-recognition.interimResults = true; // Get partial results as the user speaks
-recognition.lang = 'en-US'; // Set the language
-
-
-// Start and stop recognition
-function startListening() {
-    recognition.start();
+declare global {
+    interface Window {
+        SpeechRecognition: new () => SpeechRecognition;
+        webkitSpeechRecognition: new () => SpeechRecognition;
+    }
 }
-
-function stopListening() {
-    recognition.stop();
-}
-
 
 function Karaoke() {
     const [textToRead, setTextToRead] = useState('This is the text to read');
     const [userSpeech, setUserSpeech] = useState('');
-    const [isListening, setIsListening] = useState(false)
-
-    const recognitionRef = useRef(null); // Store the recognition instance
-
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef<SpeechRecognition | null>(null);
+    
     useEffect(() => {
-        // Initialize SpeechRecognition in useEffect
-        recognitionRef.current = recognition;
-        // ... (add your configuration options here)
+        // Initialize SpeechRecognition only once when component mounts
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            console.error("Speech recognition is not supported in this browser.");
+            return;
+        }
 
-        recognitionRef.current.onresult = (event: any) => {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
             let transcript = '';
-
-            for (let i = 0; i < event.results.length; i++) {
-                const result = event.results[i];
-                // Check if this result is FINAL or INTERIM
-                if (result.isFinal) {
-                    transcript += result[0].transcript + ' '; // Add a space after final words
-                } else {
-                    transcript += result[0].transcript; // Concatenate interim results directly
-                }
+            const results = event.results;
+            for (let i = 0; i < results.length; i++) {
+                const result = results[i];
+                transcript += result[0].transcript + (result.isFinal ? ' ' : '');
             }
-            console.log("transcript", transcript);
-            setUserSpeech(transcript);
+            setUserSpeech(transcript.trim());
+        };        
+
+        recognition.onerror = (event: any) => {
+            console.error('Speech recognition error:', event.error);
+            setIsListening(false);
         };
+
+        recognition.onend = () => {
+            if (isListening) {
+                recognition.start();
+            }
+        };
+
+        recognitionRef.current = recognition;
 
         return () => {
-            // Clean up on component unmount
-            recognitionRef.current?.stop();
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
         };
-    }, []);
+    }, [isListening]);
+
+    const toggleListening = () => {
+        if (!isListening) {
+            recognitionRef.current?.start();
+        } else {
+            recognitionRef.current?.stop();
+        }
+        setIsListening(!isListening);
+    };
 
     const startReading = () => {
         console.log("start reading");
-        recognitionRef.current.start();
+        if (recognitionRef.current) {
+            recognitionRef.current.start();
+        }
     };
 
     const stopReading = () => {
         console.log("stop reading", recognitionRef.current);
-        recognitionRef.current.stop();
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
     };
 
     const toggleReading = () => {
@@ -77,8 +93,6 @@ function Karaoke() {
         }
         setIsListening(!isListening)
       }
-
-    // ... (Logic to compare userSpeech with textToRead)
 
     return (
         <div>
