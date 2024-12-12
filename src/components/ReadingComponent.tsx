@@ -14,7 +14,7 @@ interface ReadingComponentProps {
 export default function ReadingComponent({ textToRead = "" }: ReadingComponentProps) {
   const [spokenText, setSpokenText] = useState("")
   const [isListening, setIsListening] = useState(false)
-  const [difficulty, setDifficulty] = useState<Difficulty>('easy')
+  const [difficulty, setDifficulty] = useState<Difficulty>('beginner')
 
   const handleSpeechResult = (text: string) => {
     setSpokenText(text)
@@ -38,6 +38,7 @@ export default function ReadingComponent({ textToRead = "" }: ReadingComponentPr
         textToRead={textToRead} 
         spokenText={spokenText} 
         isListening={isListening}
+        difficulty={difficulty}
       />
       <div className="flex flex-col items-center gap-4">
         <MicrophoneControl 

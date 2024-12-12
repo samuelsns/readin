@@ -17,6 +17,7 @@ interface TextDisplayProps {
   textToRead: string
   spokenText: string
   isListening?: boolean
+  difficulty?: 'beginner' | 'learning' | 'expert'
 }
 
 // Map of similar-sounding words
@@ -34,7 +35,9 @@ const similarSoundingWords: { [key: string]: string[] } = {
   'write': ['right'],
   'right': ['write'],
   'here': ['hear'],
-  'hear': ['here']
+  'hear': ['here'],
+  'tree': ['three'],
+  'three': ['tree']
 }
 
 // Feedback messages for different scenarios
@@ -55,10 +58,18 @@ const feedbackMessages = {
   ]
 }
 
+// Predefined content for different difficulty levels
+const difficultyContent = {
+  beginner: 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z',
+  learning: 'Apple Ball Cat Dog Elephant Fish Game House Ice Juice King Lion Moon Nest Orange Pen Queen Rain Sun Tree Umbrella Van Water Xray Yellow Zoo',
+  expert: ''  // Will use the provided textToRead
+}
+
 export default function TextDisplay({ 
   textToRead = "Sample text", 
   spokenText = "",
-  isListening = false 
+  isListening = false,
+  difficulty = 'expert'
 }: TextDisplayProps) {
   // State Management
   const [words, setWords] = useState<Word[]>([])
@@ -82,9 +93,23 @@ export default function TextDisplay({
       .trim()
   ), [])
 
+  // Get the appropriate text based on difficulty
+  const getDisplayText = useCallback(() => {
+    if (difficulty === 'expert') return textToRead
+    const text = difficultyContent[difficulty]
+    if (difficulty === 'beginner') {
+      return text.toUpperCase()
+    } else if (difficulty === 'learning') {
+      return text.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ')
+    }
+    return text
+  }, [difficulty, textToRead])
+
   // Reset Function
   const handleReset = useCallback(() => {
-    const cleanText = normalizeText(textToRead)
+    const cleanText = normalizeText(getDisplayText())
     const initialWords = cleanText.split(' ').map(word => ({
       text: word,
       status: 'waiting',
@@ -100,7 +125,7 @@ export default function TextDisplay({
     setWords(initialWords)
     setCurrentWordIndex(firstWordIndex !== -1 ? firstWordIndex : 0)
     setLastProcessedText("")
-  }, [textToRead, normalizeText, isPunctuation])
+  }, [getDisplayText, normalizeText, isPunctuation])
 
   // Word Processing Functions
   const moveToNextWord = useCallback((words: Word[], currentIndex: number) => {
@@ -129,9 +154,9 @@ export default function TextDisplay({
 
   // Effects
   useEffect(() => {
-    if (!textToRead) return
+    if (!getDisplayText()) return
 
-    const cleanText = normalizeText(textToRead)
+    const cleanText = normalizeText(getDisplayText())
     const initialWords = cleanText.split(' ').map(word => ({
       text: word,
       status: 'waiting',
@@ -147,10 +172,10 @@ export default function TextDisplay({
     setWords(initialWords)
     setCurrentWordIndex(firstWordIndex !== -1 ? firstWordIndex : 0)
     setLastProcessedText("")
-  }, [textToRead, normalizeText, isPunctuation])
+  }, [getDisplayText, normalizeText, isPunctuation])
 
   useEffect(() => {
-    if (!textToRead || !spokenText || !isListening || spokenText === lastProcessedText) return
+    if (!getDisplayText() || !spokenText || !isListening || spokenText === lastProcessedText) return
     
     setLastProcessedText(spokenText)
     const cleanSpokenText = normalizeText(spokenText)
@@ -170,34 +195,57 @@ export default function TextDisplay({
       const normalizedCurrentWord = normalizeText(currentWord.text)
       const normalizedSpokenWord = normalizeText(currentSpokenWord)
       
-      const similarWords = similarSoundingWords[normalizedCurrentWord] || []
-      const isSimilarSoundingWord = similarWords.includes(normalizedSpokenWord)
+      if (difficulty === 'beginner') {
+        // Strict matching for beginner level only
+        const isExactMatch = normalizedCurrentWord === normalizedSpokenWord
+        const confidence = isExactMatch ? 100 : 0
 
-      const distance = levenshteinDistance2(normalizedCurrentWord, normalizedSpokenWord)
-      const confidence = Math.max(0, 100 - (distance * 33.33))
-
-      if (distance <= 1 || isSimilarSoundingWord) {
-        currentWord.status = 'correct'
-        currentWord.confidence = isSimilarSoundingWord ? 100 : confidence
-        const nextIndex = moveToNextWord(newWords, currentWordIndex)
-        setCurrentWordIndex(nextIndex)
-        setStreak(prev => prev + 1)
-        if (streak >= 2) {
-          showRandomFeedback(true)
+        if (isExactMatch) {
+          currentWord.status = 'correct'
+          currentWord.confidence = confidence
+          const nextIndex = moveToNextWord(newWords, currentWordIndex)
+          setCurrentWordIndex(nextIndex)
+          setStreak(prev => prev + 1)
+          if (streak >= 2) {
+            showRandomFeedback(true)
+          }
+        } else if (currentSpokenWord.length >= 1) {
+          currentWord.status = 'incorrect'
+          currentWord.confidence = 0
+          setStreak(0)
+          showRandomFeedback(false)
         }
-      } else if (currentSpokenWord.length >= currentWord.text.length) {
-        currentWord.status = 'incorrect'
-        currentWord.confidence = confidence
-        setStreak(0)
-        showRandomFeedback(false)
       } else {
-        currentWord.status = 'current'
-        currentWord.confidence = confidence
+        // Flexible matching for learning and expert levels
+        const similarWords = similarSoundingWords[normalizedCurrentWord] || []
+        const isSimilarSoundingWord = similarWords.includes(normalizedSpokenWord)
+
+        const distance = levenshteinDistance2(normalizedCurrentWord, normalizedSpokenWord)
+        const confidence = Math.max(0, 100 - (distance * 33.33))
+
+        if (distance <= 1 || isSimilarSoundingWord) {
+          currentWord.status = 'correct'
+          currentWord.confidence = isSimilarSoundingWord ? 100 : confidence
+          const nextIndex = moveToNextWord(newWords, currentWordIndex)
+          setCurrentWordIndex(nextIndex)
+          setStreak(prev => prev + 1)
+          if (streak >= 2) {
+            showRandomFeedback(true)
+          }
+        } else if (currentSpokenWord.length >= currentWord.text.length) {
+          currentWord.status = 'incorrect'
+          currentWord.confidence = confidence
+          setStreak(0)
+          showRandomFeedback(false)
+        } else {
+          currentWord.status = 'current'
+          currentWord.confidence = confidence
+        }
       }
 
       return newWords
     })
-  }, [spokenText, isListening, currentWordIndex, normalizeText, moveToNextWord])
+  }, [spokenText, isListening, currentWordIndex, normalizeText, moveToNextWord, difficulty])
 
   useEffect(() => {
     const correctWords = words.filter(w => w.status === 'correct').length
