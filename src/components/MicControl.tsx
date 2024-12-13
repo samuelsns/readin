@@ -1,17 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Mic } from 'lucide-react'
-
-declare global {
-  interface Window {
-    webkitSpeechRecognition: any;
-    SpeechRecognition: any;
-  }
-}
+import '../types/speechRecognition';
 
 interface MicrophoneControlProps {
   onSpeechResult: (text: string) => void;
-  onListeningChange: (listening: boolean) => void;
+  onListeningChange: (isListening: boolean) => void;
 }
 
 export default function MicrophoneControl({
@@ -23,15 +17,20 @@ export default function MicrophoneControl({
 
   // Initialize speech recognition
   useEffect(() => {
+    // Initialize SpeechRecognition only once when component mounts
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition && !recognitionRef.current) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognitionRef.current = recognition;
+    if (!SpeechRecognition) {
+      console.error("Speech recognition is not supported in this browser.");
+      alert("Speech recognition is not supported in your browser. Please try using Chrome or Edge for the best experience.");
+      return;
     }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognitionRef.current = recognition;
 
     return () => {
       if (recognitionRef.current) {
@@ -48,7 +47,6 @@ export default function MicrophoneControl({
       const last = event.results.length - 1;
       const words = event.results[last][0].transcript.trim().split(' ');
       const lastWord = words[words.length - 1];
-      // Send the raw spoken text without any conversion
       onSpeechResult(lastWord ? lastWord : '');
     };
 
@@ -59,22 +57,44 @@ export default function MicrophoneControl({
     };
 
     recognition.onend = () => {
-      setIsListening(false);
-      onListeningChange(false);
+      // Only stop if we explicitly called stop
+      if (isListening) {
+        // Restart recognition if it ended but we're supposed to be listening
+        try {
+          recognition.start();
+        } catch (error) {
+          console.error('Error restarting recognition:', error);
+          setIsListening(false);
+          onListeningChange(false);
+        }
+      } else {
+        setIsListening(false);
+        onListeningChange(false);
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      onListeningChange(false);
+      // Only stop on critical errors
+      if (event.error === 'not-allowed' || event.error === 'audio-capture') {
+        setIsListening(false);
+        onListeningChange(false);
+      }
+      // For other errors, try to restart if we're supposed to be listening
+      else if (isListening) {
+        try {
+          recognition.start();
+        } catch (error) {
+          console.error('Error restarting recognition:', error);
+          setIsListening(false);
+          onListeningChange(false);
+        }
+      }
     };
-  }, [onSpeechResult, setIsListening, onListeningChange]);
+  }, [onSpeechResult, setIsListening, onListeningChange, isListening]);
 
   const startListening = useCallback(() => {
-    if (!recognitionRef.current) {
-      console.error('Speech recognition not supported');
-      return;
-    }
+    if (!recognitionRef.current) return;
 
     try {
       recognitionRef.current.start();
@@ -85,7 +105,7 @@ export default function MicrophoneControl({
 
   const stopListening = useCallback(() => {
     if (!recognitionRef.current) return;
-
+    setIsListening(false); // Set this before stopping to prevent auto-restart
     try {
       recognitionRef.current.stop();
     } catch (error) {
