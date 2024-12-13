@@ -168,11 +168,12 @@ export default function TextDisplay({
       const normalizedSpokenWord = normalizeText(currentSpokenWord);
       
       if (difficulty === 'beginner') {
-        // Strict matching for beginner level only
-        const isExactMatch = normalizedCurrentWord === normalizedSpokenWord;
-        const confidence = isExactMatch ? 100 : 0;
+        // More forgiving matching for beginner level
+        const distance = levenshteinDistance2(normalizedCurrentWord, normalizedSpokenWord);
+        const isCloseMatch = distance <= 1; // Allow small variations
+        const confidence = isCloseMatch ? 100 : 0;
 
-        if (isExactMatch) {
+        if (isCloseMatch) {
           currentWord.status = 'correct';
           currentWord.confidence = confidence;
           const nextIndex = moveToNextWord(newWords, currentWordIndex);
