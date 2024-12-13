@@ -28,7 +28,7 @@ export default function MicrophoneControl({
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.interimResults = false; // Set to false for more stable word recognition
     recognition.lang = 'en-US';
 
     recognitionRef.current = recognition;
@@ -73,9 +73,7 @@ export default function MicrophoneControl({
     };
 
     recognition.onend = () => {
-      // Only stop if we explicitly called stop
       if (isListening) {
-        // Restart recognition if it ended but we're supposed to be listening
         try {
           recognition.start();
         } catch (error) {
@@ -91,13 +89,10 @@ export default function MicrophoneControl({
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      // Only stop on critical errors
       if (event.error === 'not-allowed' || event.error === 'audio-capture') {
         setIsListening(false);
         onListeningChange(false);
-      }
-      // For other errors, try to restart if we're supposed to be listening
-      else if (isListening) {
+      } else if (isListening) {
         try {
           recognition.start();
         } catch (error) {
@@ -108,7 +103,6 @@ export default function MicrophoneControl({
       }
     };
 
-    // Cleanup function to clear the timer
     return () => {
       if (restartTimerRef.current) {
         clearTimeout(restartTimerRef.current);
