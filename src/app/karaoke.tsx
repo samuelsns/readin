@@ -31,9 +31,17 @@ function Karaoke() {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
         recognition.lang = 'en-US';
 
+        let timeoutId: NodeJS.Timeout;
+        
+        recognition.onstart = () => {
+            console.log('Speech recognition started');
+        };
+
         recognition.onresult = (event: SpeechRecognitionEvent) => {
+            clearTimeout(timeoutId);
             let transcript = '';
             const results = event.results;
             for (let i = 0; i < results.length; i++) {
@@ -45,12 +53,42 @@ function Karaoke() {
 
         recognition.onerror = (event: any) => {
             console.error('Speech recognition error:', event.error);
-            setIsListening(false);
+            if (event.error === 'no-speech') {
+                // Restart recognition if no speech is detected
+                try {
+                    recognition.stop();
+                    setTimeout(() => {
+                        if (isListening) {
+                            recognition.start();
+                        }
+                    }, 100);
+                } catch (e) {
+                    console.error('Error restarting recognition:', e);
+                }
+            }
+            // Don't set isListening to false on every error
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                setIsListening(false);
+            }
         };
 
         recognition.onend = () => {
+            console.log('Speech recognition ended');
+            // Auto-restart if still supposed to be listening
             if (isListening) {
-                recognition.start();
+                try {
+                    recognition.start();
+                    // Set a timeout to detect long periods of silence
+                    timeoutId = setTimeout(() => {
+                        if (isListening) {
+                            recognition.stop();
+                            recognition.start();
+                        }
+                    }, 10000); // Reset after 10 seconds of silence
+                } catch (e) {
+                    console.error('Error restarting recognition:', e);
+                    setIsListening(false);
+                }
             }
         };
 
