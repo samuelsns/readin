@@ -14,6 +14,7 @@ export default function MicrophoneControl({
 }: MicrophoneControlProps) {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const restartTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -48,6 +49,21 @@ export default function MicrophoneControl({
       const words = event.results[last][0].transcript.trim().split(' ');
       const lastWord = words[words.length - 1];
       onSpeechResult(lastWord ? lastWord : '');
+
+      // Clear and set a new restart timer
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+      }
+      restartTimerRef.current = setTimeout(() => {
+        if (isListening) {
+          try {
+            recognition.stop();
+            recognition.start();
+          } catch (error) {
+            console.error('Error in auto-restart:', error);
+          }
+        }
+      }, 5000); // 5 seconds of silence before restart
     };
 
     recognition.onstart = () => {
@@ -91,6 +107,13 @@ export default function MicrophoneControl({
         }
       }
     };
+
+    // Cleanup function to clear the timer
+    return () => {
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+      }
+    };
   }, [onSpeechResult, setIsListening, onListeningChange, isListening]);
 
   const startListening = useCallback(() => {
@@ -106,6 +129,9 @@ export default function MicrophoneControl({
   const stopListening = useCallback(() => {
     if (!recognitionRef.current) return;
     setIsListening(false); // Set this before stopping to prevent auto-restart
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+    }
     try {
       recognitionRef.current.stop();
     } catch (error) {
