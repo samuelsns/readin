@@ -3,12 +3,13 @@
 import React, { useState } from 'react'
 import TextDisplay from './TextDisplay'
 import MicrophoneControl from './MicControl'
-import DifficultySelector, { Difficulty } from './DifficultySelector'
+import DifficultySelector from './DifficultySelector'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mic } from 'lucide-react'
+import { Difficulty } from './DifficultySelector'
 
-interface ReadingComponentProps {
-  textToRead: string;
+export interface ReadingComponentProps {
+  textToRead?: string
 }
 
 export default function ReadingComponent({ textToRead = "" }: ReadingComponentProps) {
@@ -33,8 +34,8 @@ export default function ReadingComponent({ textToRead = "" }: ReadingComponentPr
       <div className="flex-1 p-4 w-full">
         <div className="max-w-[95%] mx-auto">
           <DifficultySelector 
-            currentDifficulty={difficulty}
             onDifficultyChange={handleDifficultyChange}
+            currentDifficulty={difficulty}
           />
           <div className="space-y-4">
             <TextDisplay 

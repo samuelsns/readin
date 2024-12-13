@@ -24,6 +24,7 @@ function Karaoke() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             console.error("Speech recognition is not supported in this browser.");
+            alert("Sorry! Speech recognition is not supported in your browser. Please try using Chrome, Edge, or Safari for the best experience.");
             return;
         }
 

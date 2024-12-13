@@ -1,10 +1,12 @@
+"use client";
+
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent } from "@/components/ui/card"
 import { levenshteinDistance2 } from '@/lib/calculateMatch'
 import { Button } from "@/components/ui/button"
 import { RotateCcw, Star } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { DifficultyLevel, getTextByDifficulty, getTextCount, feedbackMessages } from '@/types/displayTexts'
+import { Difficulty } from './DifficultySelector'
 
 // Types and Interfaces
 interface Word {
@@ -18,7 +20,7 @@ interface TextDisplayProps {
   textToRead: string
   spokenText: string
   isListening?: boolean
-  difficulty?: DifficultyLevel
+  difficulty?: Difficulty
 }
 
 // Map of similar-sounding words
@@ -27,9 +29,9 @@ const similarSoundingWords: { [key: string]: string[] } = {
   'fan': ['fun'],
   'aloud': ['allowed'],
   'allowed': ['aloud'],
-  'there': ['their', 'they\'re'],
-  'their': ['there', 'they\'re'],
-  'they\'re': ['there', 'their'],
+  'there': ['their', "they're"],
+  'their': ['there', "they're"],
+  "they're": ['there', 'their'],
   'to': ['too', 'two'],
   'too': ['to', 'two'],
   'two': ['to', 'too'],
@@ -41,11 +43,68 @@ const similarSoundingWords: { [key: string]: string[] } = {
   'three': ['tree']
 }
 
+// Text content for different difficulty levels
+const texts = {
+  beginner: [
+    'a b c d e f g h i j k l m n o p q r s t u v w x y z',
+    'the cat sat on the mat',
+    'i can read this book',
+    'we like to play games'
+  ],
+  learning: [
+    'The quick brown fox jumps over the lazy dog.',
+    'I love reading books in my free time.',
+    'She sells seashells by the seashore.',
+    'The rain in Spain stays mainly in the plain.'
+  ],
+  expert: [
+    'The mysterious package arrived unexpectedly at midnight.',
+    'Scientists discovered a remarkable new species in the Amazon rainforest.',
+    'The ancient civilization left behind intricate stone carvings.',
+    'Technology continues to revolutionize how we communicate globally.'
+  ]
+}
+
+const getTextByDifficulty = (difficulty: Difficulty, index: number = 0): string => {
+  return texts[difficulty][index % texts[difficulty].length]
+}
+
+const getTextCount = (difficulty: Difficulty): number => {
+  return texts[difficulty].length
+}
+
+const feedbackMessages = {
+  great: [
+    '🌟 Excellent job!',
+    '🎯 You\'re on a roll!',
+    '⭐ Keep it up!',
+    '🎉 Fantastic!',
+    '🌈 Superb!',
+    '🏆 Wonderful!',
+    '✨ Brilliant!',
+    '🌟 Marvelous!',
+    '🎯 Outstanding!',
+    '⭐ Exceptional!'
+  ],
+  good: [
+    '👍 Good job!',
+    '✨ Well done!',
+    '🎉 Great effort!',
+    '🌟 Nice work!',
+    '⭐ Excellent!',
+    '🎯 Super!',
+    '🌈 Fantastic!',
+    '🏆 Terrific!',
+    '✨ Awesome!',
+    '👏 Good going!'
+  ]
+}
+
 export default function TextDisplay({ 
   textToRead = "Sample text", 
   spokenText = "",
   isListening = false,
-  difficulty = 'expert'
+  difficulty = 'beginner'
 }: TextDisplayProps) {
   // State Management
   const [words, setWords] = useState<Word[]>([])
@@ -138,7 +197,15 @@ export default function TextDisplay({
   }, [])
 
   const showRandomFeedback = (isCorrect: boolean) => {
-    const messages = isCorrect ? feedbackMessages.great : feedbackMessages.good
+    const messages = isCorrect ? feedbackMessages.great : [
+      '💪 Keep trying!',
+      '👊 Almost there!',
+      '🎯 You can do it!',
+      '✨ Try again!',
+      '🌟 Getting closer!',
+      '💫 Keep it up!',
+      '🔥 Don\'t give up!'
+    ]
     const randomMessage = messages[Math.floor(Math.random() * messages.length)]
     setFeedback(randomMessage)
     setShowFeedback(true)
@@ -168,9 +235,12 @@ export default function TextDisplay({
       const normalizedSpokenWord = normalizeText(currentSpokenWord);
       
       if (difficulty === 'beginner') {
-        // More forgiving matching for beginner level
+        // Very forgiving matching for beginner level
         const distance = levenshteinDistance2(normalizedCurrentWord, normalizedSpokenWord);
-        const isCloseMatch = distance <= 1; // Allow small variations
+        const wordLength = normalizedCurrentWord.length;
+        // Allow more variations for longer words
+        const maxAllowedDistance = Math.min(2, Math.floor(wordLength / 2));
+        const isCloseMatch = distance <= maxAllowedDistance;
         const confidence = isCloseMatch ? 100 : 0;
 
         if (isCloseMatch) {
