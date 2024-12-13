@@ -1,100 +1,109 @@
-import React, { useState, useCallback, useRef } from 'react'
-import { Mic, MicOff } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from "@/components/ui/button"
-import { SpeechRecognitionEvent, SpeechRecognition } from '../types/speechRecognition';
+import { Mic } from 'lucide-react'
 
-export default function MicControl({ onSpeechResult, onListeningChange }: { onSpeechResult: (text: string) => void; onListeningChange?: (isListening: boolean) => void }) {
-  const [isListening, setIsListening] = useState(false)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const lastProcessedTextRef = useRef<string>("")
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any;
+    SpeechRecognition: any;
+  }
+}
 
-  const updateListeningState = useCallback((listening: boolean) => {
-    setIsListening(listening)
-    onListeningChange?.(listening)
-    if (!listening) {
-      lastProcessedTextRef.current = ""
-    }
-  }, [onListeningChange])
+interface MicrophoneControlProps {
+  onSpeechResult: (text: string) => void;
+  onListeningChange: (listening: boolean) => void;
+}
 
-  const processTranscript = useCallback((transcript: string) => {
-    // Clean up the transcript
-    const cleanTranscript = transcript.trim().toLowerCase()
-    
-    // Only process if we have new content
-    if (cleanTranscript && cleanTranscript !== lastProcessedTextRef.current) {
-      lastProcessedTextRef.current = cleanTranscript
-      onSpeechResult(cleanTranscript)
-    }
-  }, [onSpeechResult])
+export default function MicrophoneControl({
+  onSpeechResult,
+  onListeningChange,
+}: MicrophoneControlProps) {
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-  const startListening = useCallback(() => {
-    updateListeningState(true)
-    lastProcessedTextRef.current = ""
+  // Initialize speech recognition
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition && !recognitionRef.current) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      console.error("Speech recognition is not supported in this browser.")
-      return
+      recognitionRef.current = recognition;
     }
 
-    const recognition = new SpeechRecognition()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const result = event.results[event.resultIndex]
-      if (result) {
-        const transcript = result[0].transcript
-        // Only process if this is a final result or it's a new interim result
-        if (result.isFinal || transcript.trim() !== lastProcessedTextRef.current) {
-          processTranscript(transcript)
-        }
-      }
-    }
+      const last = event.results.length - 1;
+      const words = event.results[last][0].transcript.trim().split(' ');
+      const lastWord = words[words.length - 1];
+      // Send the raw spoken text without any conversion
+      onSpeechResult(lastWord ? lastWord : '');
+    };
 
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event)
-      updateListeningState(false)
-    }
+    recognition.onstart = () => {
+      setIsListening(true);
+      onSpeechResult(''); // Reset the text when starting
+      onListeningChange(true);
+    };
 
     recognition.onend = () => {
-      if (isListening) {
-        // Restart if we're still supposed to be listening
-        recognition.start()
-      } else {
-        updateListeningState(false)
-      }
+      setIsListening(false);
+      onListeningChange(false);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      onListeningChange(false);
+    };
+  }, [onSpeechResult, setIsListening, onListeningChange]);
+
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current) {
+      console.error('Speech recognition not supported');
+      return;
     }
 
-    recognitionRef.current = recognition
-    recognition.start()
-  }, [isListening, processTranscript, updateListeningState])
+    try {
+      recognitionRef.current.start();
+    } catch (error) {
+      console.error('Error starting recognition:', error);
+    }
+  }, []);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      updateListeningState(false)
+    if (!recognitionRef.current) return;
+
+    try {
+      recognitionRef.current.stop();
+    } catch (error) {
+      console.error('Error stopping recognition:', error);
     }
-  }, [updateListeningState])
+  }, []);
 
   return (
     <Button
       onClick={isListening ? stopListening : startListening}
-      variant={isListening ? "destructive" : "default"}
-      className="w-full max-w-xs mx-auto flex items-center justify-center gap-2"
+      className={`${
+        isListening 
+          ? "bg-red-600 hover:bg-red-700" 
+          : "bg-[#14162c] hover:bg-[#14162c]/90"
+      } text-white px-6 h-10 inline-flex items-center justify-center gap-2 rounded-md transition-colors`}
     >
-      {isListening ? (
-        <>
-          <MicOff className="w-4 h-4" />
-          Stop Reading
-        </>
-      ) : (
-        <>
-          <Mic className="w-4 h-4" />
-          Start Reading
-        </>
-      )}
+      <Mic className="w-4 h-4" />
+      {isListening ? "Stop Reading" : "Start Reading"}
     </Button>
-  )
+  );
 }

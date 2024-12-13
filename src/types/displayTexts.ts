@@ -9,18 +9,18 @@ interface DisplayTexts {
 // Feedback messages for different scenarios
 export const feedbackMessages = {
   great: [
-    "Amazing! ",
-    "Fantastic job! ",
-    "You're a star! ",
-    "Keep it up! ",
-    "Wonderful! "
+    "Amazing! 🌟",
+    "Fantastic job! 🎉",
+    "You're a star! ⭐",
+    "Keep it up! 🚀",
+    "Wonderful! 🌈"
   ],
   good: [
-    "Good try! ",
-    "Almost there! ",
-    "Keep going! ",
-    "You can do it! ",
-    "Nice effort! "
+    "Good try! 👍",
+    "Almost there! 💫",
+    "Keep going! 🌟",
+    "You can do it! 💪",
+    "Nice effort! 🌅"
   ]
 }
 
