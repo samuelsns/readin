@@ -29,6 +29,7 @@ function Karaoke() {
         }
 
         const recognition = new SpeechRecognition();
+<<<<<<< HEAD
         recognition.continuous = true;  // Keep listening continuously
         recognition.interimResults = true;  // Get results as they happen
         recognition.maxAlternatives = 1;
@@ -59,11 +60,32 @@ function Karaoke() {
             const result = event.results[event.results.length - 1];
             if (result) {
                 setUserSpeech(result[0].transcript.trim());
+=======
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+        recognition.lang = 'en-US';
+
+        let timeoutId: NodeJS.Timeout;
+        
+        recognition.onstart = () => {
+            console.log('Speech recognition started');
+        };
+
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+            clearTimeout(timeoutId);
+            let transcript = '';
+            const results = event.results;
+            for (let i = 0; i < results.length; i++) {
+                const result = results[i];
+                transcript += result[0].transcript + (result.isFinal ? ' ' : '');
+>>>>>>> 0071c5a5f7d5da8383357cc41ba3a30716e7f270
             }
         };
 
         recognition.onerror = (event: any) => {
             console.error('Speech recognition error:', event.error);
+<<<<<<< HEAD
             // Just restart immediately on any error
             if (isListening && recognitionRef.current) {
                 try {
@@ -81,6 +103,43 @@ function Karaoke() {
                     recognition.start();
                 } catch (e) {
                     console.error('Error restarting:', e);
+=======
+            if (event.error === 'no-speech') {
+                // Restart recognition if no speech is detected
+                try {
+                    recognition.stop();
+                    setTimeout(() => {
+                        if (isListening) {
+                            recognition.start();
+                        }
+                    }, 100);
+                } catch (e) {
+                    console.error('Error restarting recognition:', e);
+                }
+            }
+            // Don't set isListening to false on every error
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                setIsListening(false);
+            }
+        };
+
+        recognition.onend = () => {
+            console.log('Speech recognition ended');
+            // Auto-restart if still supposed to be listening
+            if (isListening) {
+                try {
+                    recognition.start();
+                    // Set a timeout to detect long periods of silence
+                    timeoutId = setTimeout(() => {
+                        if (isListening) {
+                            recognition.stop();
+                            recognition.start();
+                        }
+                    }, 10000); // Reset after 10 seconds of silence
+                } catch (e) {
+                    console.error('Error restarting recognition:', e);
+                    setIsListening(false);
+>>>>>>> 0071c5a5f7d5da8383357cc41ba3a30716e7f270
                 }
             }
         };
