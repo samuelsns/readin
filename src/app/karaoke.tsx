@@ -29,28 +29,59 @@ function Karaoke() {
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
+        recognition.continuous = true;  // Keep listening continuously
+        recognition.interimResults = true;  // Get results as they happen
+        recognition.maxAlternatives = 1;
         recognition.lang = 'en-US';
 
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-            let transcript = '';
-            const results = event.results;
-            for (let i = 0; i < results.length; i++) {
-                const result = results[i];
-                transcript += result[0].transcript + (result.isFinal ? ' ' : '');
+        // Track initial detection state
+        let isFirstDetection = true;
+
+        recognition.onstart = () => {
+            console.log('Recognition started');
+            // Set initial detection sensitivity
+            if (isFirstDetection) {
+                recognition.interimResults = true;
             }
-            setUserSpeech(transcript.trim());
-        };        
+        };
+
+        recognition.onaudiostart = () => {
+            // Ensure microphone is fully initialized
+            if (isFirstDetection) {
+                recognition.stop();
+                recognition.start();
+                isFirstDetection = false;
+            }
+        };
+
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+            // Process results immediately without any delays
+            const result = event.results[event.results.length - 1];
+            if (result) {
+                setUserSpeech(result[0].transcript.trim());
+            }
+        };
 
         recognition.onerror = (event: any) => {
             console.error('Speech recognition error:', event.error);
-            setIsListening(false);
+            // Just restart immediately on any error
+            if (isListening && recognitionRef.current) {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.error('Error restarting:', e);
+                }
+            }
         };
 
         recognition.onend = () => {
+            // Immediately restart if we're supposed to be listening
             if (isListening) {
-                recognition.start();
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.error('Error restarting:', e);
+                }
             }
         };
 
@@ -65,7 +96,13 @@ function Karaoke() {
 
     const toggleListening = () => {
         if (!isListening) {
-            recognitionRef.current?.start();
+            if (recognitionRef.current) {
+                // Reset recognition instance for fresh start
+                recognitionRef.current.abort();
+                setTimeout(() => {
+                    recognitionRef.current?.start();
+                }, 100);
+            }
         } else {
             recognitionRef.current?.stop();
         }
