@@ -20,7 +20,6 @@ function Karaoke() {
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     
     useEffect(() => {
-        // Initialize SpeechRecognition only once when component mounts
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             console.error("Speech recognition is not supported in this browser.");
@@ -29,117 +28,90 @@ function Karaoke() {
         }
 
         const recognition = new SpeechRecognition();
-<<<<<<< HEAD
-        recognition.continuous = true;  // Keep listening continuously
-        recognition.interimResults = true;  // Get results as they happen
-        recognition.maxAlternatives = 1;
-        recognition.lang = 'en-US';
-
-        // Track initial detection state
-        let isFirstDetection = true;
-
-        recognition.onstart = () => {
-            console.log('Recognition started');
-            // Set initial detection sensitivity
-            if (isFirstDetection) {
-                recognition.interimResults = true;
-            }
-        };
-
-        recognition.onaudiostart = () => {
-            // Ensure microphone is fully initialized
-            if (isFirstDetection) {
-                recognition.stop();
-                recognition.start();
-                isFirstDetection = false;
-            }
-        };
-
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-            // Process results immediately without any delays
-            const result = event.results[event.results.length - 1];
-            if (result) {
-                setUserSpeech(result[0].transcript.trim());
-=======
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognition.lang = 'en-US';
 
-        let timeoutId: NodeJS.Timeout;
-        
+        // Track initial detection state
+        let isFirstDetection = true;
+        let microphoneInitialized = false;
+
+        // Initialize microphone immediately
+        if (!microphoneInitialized) {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(() => {
+                    microphoneInitialized = true;
+                })
+                .catch(error => console.error('Microphone access error:', error));
+        }
+
         recognition.onstart = () => {
-            console.log('Speech recognition started');
+            console.log('Recognition started');
+            if (isFirstDetection) {
+                // Force high sensitivity for first detection
+                recognition.interimResults = true;
+            }
+        };
+
+        recognition.onaudiostart = () => {
+            if (isFirstDetection && microphoneInitialized) {
+                // Quick restart for better initial pickup
+                recognition.stop();
+                requestAnimationFrame(() => {
+                    try {
+                        recognition.start();
+                        isFirstDetection = false;
+                    } catch (e) {
+                        console.error('Quick restart error:', e);
+                    }
+                });
+            }
         };
 
         recognition.onresult = (event: SpeechRecognitionEvent) => {
-            clearTimeout(timeoutId);
-            let transcript = '';
-            const results = event.results;
-            for (let i = 0; i < results.length; i++) {
-                const result = results[i];
-                transcript += result[0].transcript + (result.isFinal ? ' ' : '');
->>>>>>> 0071c5a5f7d5da8383357cc41ba3a30716e7f270
+            const result = event.results[event.results.length - 1];
+            if (result) {
+                const bestMatch = Array.from(result)
+                    .sort((a, b) => b.confidence - a.confidence)[0];
+                setUserSpeech(bestMatch.transcript.trim());
             }
         };
 
         recognition.onerror = (event: any) => {
             console.error('Speech recognition error:', event.error);
-<<<<<<< HEAD
-            // Just restart immediately on any error
+            
             if (isListening && recognitionRef.current) {
-                try {
-                    recognition.start();
-                } catch (e) {
-                    console.error('Error restarting:', e);
-                }
-            }
-        };
-
-        recognition.onend = () => {
-            // Immediately restart if we're supposed to be listening
-            if (isListening) {
-                try {
-                    recognition.start();
-                } catch (e) {
-                    console.error('Error restarting:', e);
-=======
-            if (event.error === 'no-speech') {
-                // Restart recognition if no speech is detected
-                try {
-                    recognition.stop();
+                if (restartCount < MAX_RESTART_ATTEMPTS) {
+                    const backoffDelay = Math.min(100 * Math.pow(2, restartCount), 1000);
                     setTimeout(() => {
-                        if (isListening) {
+                        try {
                             recognition.start();
+                            restartCount++;
+                        } catch (e) {
+                            console.error('Error in restart attempt:', e);
                         }
-                    }, 100);
-                } catch (e) {
-                    console.error('Error restarting recognition:', e);
+                    }, backoffDelay);
+                } else {
+                    restartCount = 0;
+                    isFirstDetection = true;
+                    setIsListening(false);
                 }
-            }
-            // Don't set isListening to false on every error
-            if (event.error !== 'no-speech' && event.error !== 'aborted') {
-                setIsListening(false);
             }
         };
 
         recognition.onend = () => {
-            console.log('Speech recognition ended');
-            // Auto-restart if still supposed to be listening
+            const timeSinceLastResult = Date.now() - lastResultTimestamp;
+            
             if (isListening) {
                 try {
+                    if (timeSinceLastResult > 5000) { 
+                        isFirstDetection = true; 
+                    }
                     recognition.start();
-                    // Set a timeout to detect long periods of silence
-                    timeoutId = setTimeout(() => {
-                        if (isListening) {
-                            recognition.stop();
-                            recognition.start();
-                        }
-                    }, 10000); // Reset after 10 seconds of silence
                 } catch (e) {
-                    console.error('Error restarting recognition:', e);
+                    console.error('Error restarting:', e);
                     setIsListening(false);
->>>>>>> 0071c5a5f7d5da8383357cc41ba3a30716e7f270
                 }
             }
         };
@@ -156,7 +128,6 @@ function Karaoke() {
     const toggleListening = () => {
         if (!isListening) {
             if (recognitionRef.current) {
-                // Reset recognition instance for fresh start
                 recognitionRef.current.abort();
                 setTimeout(() => {
                     recognitionRef.current?.start();
