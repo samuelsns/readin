@@ -1,9 +1,12 @@
+"use client";
+
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent } from "@/components/ui/card"
 import { levenshteinDistance2 } from '@/lib/calculateMatch'
 import { Button } from "@/components/ui/button"
 import { RotateCcw, Star } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Difficulty } from './DifficultySelector'
 
 // Types and Interfaces
 interface Word {
@@ -17,7 +20,7 @@ interface TextDisplayProps {
   textToRead: string
   spokenText: string
   isListening?: boolean
-  difficulty?: 'beginner' | 'learning' | 'expert'
+  difficulty?: Difficulty
 }
 
 // Map of similar-sounding words
@@ -26,9 +29,9 @@ const similarSoundingWords: { [key: string]: string[] } = {
   'fan': ['fun'],
   'aloud': ['allowed'],
   'allowed': ['aloud'],
-  'there': ['their', 'they\'re'],
-  'their': ['there', 'they\'re'],
-  'they\'re': ['there', 'their'],
+  'there': ['their', "they're"],
+  'their': ['there', "they're"],
+  "they're": ['there', 'their'],
   'to': ['too', 'two'],
   'too': ['to', 'two'],
   'two': ['to', 'too'],
@@ -40,36 +43,68 @@ const similarSoundingWords: { [key: string]: string[] } = {
   'three': ['tree']
 }
 
-// Feedback messages for different scenarios
-const feedbackMessages = {
-  great: [
-    "Amazing! 🌟",
-    "Fantastic job! 🎉",
-    "You're a star! ⭐",
-    "Keep it up! 🚀",
-    "Wonderful! 🌈"
+// Text content for different difficulty levels
+const texts = {
+  beginner: [
+    'a b c d e f g h i j k l m n o p q r s t u v w x y z',
+    'the cat sat on the mat',
+    'i can read this book',
+    'we like to play games'
   ],
-  good: [
-    "Good try! 👍",
-    "Almost there! 💫",
-    "Keep going! 🌟",
-    "You can do it! 💪",
-    "Nice effort! 🌅"
+  learning: [
+    'The quick brown fox jumps over the lazy dog.',
+    'I love reading books in my free time.',
+    'She sells seashells by the seashore.',
+    'The rain in Spain stays mainly in the plain.'
+  ],
+  expert: [
+    'The mysterious package arrived unexpectedly at midnight.',
+    'Scientists discovered a remarkable new species in the Amazon rainforest.',
+    'The ancient civilization left behind intricate stone carvings.',
+    'Technology continues to revolutionize how we communicate globally.'
   ]
 }
 
-// Predefined content for different difficulty levels
-const difficultyContent = {
-  beginner: 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z',
-  learning: 'Apple Ball Cat Dog Elephant Fish Game House Ice Juice King Lion Moon Nest Orange Pen Queen Rain Sun Tree Umbrella Van Water Xray Yellow Zoo',
-  expert: ''  // Will use the provided textToRead
+const getTextByDifficulty = (difficulty: Difficulty, index: number = 0): string => {
+  return texts[difficulty][index % texts[difficulty].length]
+}
+
+const getTextCount = (difficulty: Difficulty): number => {
+  return texts[difficulty].length
+}
+
+const feedbackMessages = {
+  great: [
+    '🌟 Excellent job!',
+    '🎯 You\'re on a roll!',
+    '⭐ Keep it up!',
+    '🎉 Fantastic!',
+    '🌈 Superb!',
+    '🏆 Wonderful!',
+    '✨ Brilliant!',
+    '🌟 Marvelous!',
+    '🎯 Outstanding!',
+    '⭐ Exceptional!'
+  ],
+  good: [
+    '👍 Good job!',
+    '✨ Well done!',
+    '🎉 Great effort!',
+    '🌟 Nice work!',
+    '⭐ Excellent!',
+    '🎯 Super!',
+    '🌈 Fantastic!',
+    '🏆 Terrific!',
+    '✨ Awesome!',
+    '👏 Good going!'
+  ]
 }
 
 export default function TextDisplay({ 
   textToRead = "Sample text", 
   spokenText = "",
   isListening = false,
-  difficulty = 'expert'
+  difficulty = 'beginner'
 }: TextDisplayProps) {
   // State Management
   const [words, setWords] = useState<Word[]>([])
@@ -79,53 +114,70 @@ export default function TextDisplay({
   const [showFeedback, setShowFeedback] = useState(false)
   const [streak, setStreak] = useState(0)
   const [progress, setProgress] = useState(0)
+  const [textIndex, setTextIndex] = useState(0)
 
   // Utility Functions
   const isPunctuation = useCallback((word: string) => (
     /^[.!?,]+$/.test(word.trim())
   ), [])
 
-  const normalizeText = useCallback((text: string) => (
-    text.toLowerCase()
+  // Word normalization helper
+  const normalizeText = useCallback((text: string) => {
+    // Handle number word conversion first
+    const numberWords: { [key: string]: string } = {
+      'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
+      'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10'
+    };
+    
+    let processedText = text.toLowerCase();
+    if (numberWords[processedText]) {
+      processedText = numberWords[processedText];
+    }
+    
+    // Apply existing text normalization
+    return processedText
       .replace(/[^a-z0-9\s.!?,]/g, '')
-      .replace(/([.!?,])/g, '$1')  
+      .replace(/([.!?,])/g, '$1')
       .replace(/\s+/g, ' ')
-      .trim()
-  ), [])
+      .trim();
+  }, []);
 
   // Get the appropriate text based on difficulty
   const getDisplayText = useCallback(() => {
-    if (difficulty === 'expert') return textToRead
-    const text = difficultyContent[difficulty]
-    if (difficulty === 'beginner') {
-      return text.toUpperCase()
-    } else if (difficulty === 'learning') {
-      return text.split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-      ).join(' ')
-    }
-    return text
-  }, [difficulty, textToRead])
+    return getTextByDifficulty(difficulty, textIndex)
+  }, [difficulty, textIndex])
+
+  // Handle text swap
+  const handleSwapText = useCallback(() => {
+    const maxTexts = getTextCount(difficulty)
+    setTextIndex(prev => (prev + 1) % maxTexts)
+    setWords([])
+    setCurrentWordIndex(0)
+    setLastProcessedText("")
+    setStreak(0)
+    setProgress(0)
+  }, [difficulty])
 
   // Reset Function
   const handleReset = useCallback(() => {
-    const cleanText = normalizeText(getDisplayText())
+    const cleanText = normalizeText(getDisplayText());
     const initialWords = cleanText.split(' ').map(word => ({
       text: word,
       status: 'waiting',
       confidence: 0,
       isPunctuation: isPunctuation(word)
-    }))
+    }));
 
-    const firstWordIndex = initialWords.findIndex(word => !word.isPunctuation)
+    const firstWordIndex = initialWords.findIndex(word => !word.isPunctuation);
     if (firstWordIndex !== -1) {
-      initialWords[firstWordIndex].status = 'current'
+      initialWords[firstWordIndex].status = 'current';
     }
 
-    setWords(initialWords)
-    setCurrentWordIndex(firstWordIndex !== -1 ? firstWordIndex : 0)
-    setLastProcessedText("")
-  }, [getDisplayText, normalizeText, isPunctuation])
+    setWords(initialWords);
+    setCurrentWordIndex(firstWordIndex !== -1 ? firstWordIndex : 0);
+    setStreak(0);
+    setProgress(0); // Reset progress bar when starting over
+  }, [getDisplayText, normalizeText, isPunctuation]);
 
   // Word Processing Functions
   const moveToNextWord = useCallback((words: Word[], currentIndex: number) => {
@@ -145,7 +197,15 @@ export default function TextDisplay({
   }, [])
 
   const showRandomFeedback = (isCorrect: boolean) => {
-    const messages = isCorrect ? feedbackMessages.great : feedbackMessages.good
+    const messages = isCorrect ? feedbackMessages.great : [
+      '💪 Keep trying!',
+      '👊 Almost there!',
+      '🎯 You can do it!',
+      '✨ Try again!',
+      '🌟 Getting closer!',
+      '💫 Keep it up!',
+      '🔥 Don\'t give up!'
+    ]
     const randomMessage = messages[Math.floor(Math.random() * messages.length)]
     setFeedback(randomMessage)
     setShowFeedback(true)
@@ -154,234 +214,189 @@ export default function TextDisplay({
 
   // Effects
   useEffect(() => {
-    if (!getDisplayText()) return
+    if (!getDisplayText() || !spokenText || !isListening || spokenText === lastProcessedText) return;
+    
+    setLastProcessedText(spokenText);
+    const cleanSpokenText = normalizeText(spokenText);
+    const spokenWords = cleanSpokenText.split(' ');
+    const currentSpokenWord = spokenWords[spokenWords.length - 1];
 
-    const cleanText = normalizeText(getDisplayText())
+    if (!currentSpokenWord) return;
+
+    setWords(prevWords => {
+      const newWords = [...prevWords];
+      const currentWord = prevWords[currentWordIndex];
+
+      if (!currentWord || currentWord.status === 'correct' || currentWord.isPunctuation) {
+        return prevWords;
+      }
+
+      const normalizedCurrentWord = normalizeText(currentWord.text);
+      const normalizedSpokenWord = normalizeText(currentSpokenWord);
+      
+      if (difficulty === 'beginner') {
+        // Very forgiving matching for beginner level
+        const distance = levenshteinDistance2(normalizedCurrentWord, normalizedSpokenWord);
+        const wordLength = normalizedCurrentWord.length;
+        // Allow more variations for longer words
+        const maxAllowedDistance = Math.min(2, Math.floor(wordLength / 2));
+        const isCloseMatch = distance <= maxAllowedDistance;
+        const confidence = isCloseMatch ? 100 : 0;
+
+        if (isCloseMatch) {
+          currentWord.status = 'correct';
+          currentWord.confidence = confidence;
+          const nextIndex = moveToNextWord(newWords, currentWordIndex);
+          setCurrentWordIndex(nextIndex);
+          setStreak(prev => prev + 1);
+          
+          // Update progress only for correct words
+          const correctCount = newWords.filter(w => w.status === 'correct').length;
+          const totalCount = newWords.filter(w => !w.isPunctuation).length;
+          setProgress((correctCount / totalCount) * 100);
+          
+          if (streak >= 2) {
+            showRandomFeedback(true);
+          }
+        } else if (currentSpokenWord.length >= 1) {
+          currentWord.status = 'incorrect';
+          currentWord.confidence = 0;
+          setStreak(0);
+          showRandomFeedback(false);
+        }
+      } else {
+        // Flexible matching for learning and expert levels
+        const similarWords = similarSoundingWords[normalizedCurrentWord] || [];
+        const isSimilarSoundingWord = similarWords.includes(normalizedSpokenWord);
+
+        const distance = levenshteinDistance2(normalizedCurrentWord, normalizedSpokenWord);
+        const confidence = Math.max(0, 100 - (distance * 33.33));
+
+        if (distance <= 1 || isSimilarSoundingWord) {
+          currentWord.status = 'correct';
+          currentWord.confidence = isSimilarSoundingWord ? 100 : confidence;
+          const nextIndex = moveToNextWord(newWords, currentWordIndex);
+          setCurrentWordIndex(nextIndex);
+          setStreak(prev => prev + 1);
+          
+          // Update progress only for correct words
+          const correctCount = newWords.filter(w => w.status === 'correct').length;
+          const totalCount = newWords.filter(w => !w.isPunctuation).length;
+          setProgress((correctCount / totalCount) * 100);
+          
+          if (streak >= 2) {
+            showRandomFeedback(true);
+          }
+        } else if (currentSpokenWord.length >= currentWord.text.length) {
+          currentWord.status = 'incorrect';
+          currentWord.confidence = confidence;
+          setStreak(0);
+          showRandomFeedback(false);
+        } else {
+          currentWord.status = 'current';
+          currentWord.confidence = confidence;
+        }
+      }
+
+      return newWords;
+    });
+  }, [spokenText, isListening, currentWordIndex, normalizeText, moveToNextWord, difficulty]);
+
+  // Reset progress when changing text
+  useEffect(() => {
+    if (!getDisplayText()) return;
+
+    const cleanText = normalizeText(getDisplayText());
     const initialWords = cleanText.split(' ').map(word => ({
       text: word,
       status: 'waiting',
       confidence: 0,
       isPunctuation: isPunctuation(word)
-    }))
+    }));
 
-    const firstWordIndex = initialWords.findIndex(word => !word.isPunctuation)
+    const firstWordIndex = initialWords.findIndex(word => !word.isPunctuation);
     if (firstWordIndex !== -1) {
-      initialWords[firstWordIndex].status = 'current'
+      initialWords[firstWordIndex].status = 'current';
     }
 
-    setWords(initialWords)
-    setCurrentWordIndex(firstWordIndex !== -1 ? firstWordIndex : 0)
-    setLastProcessedText("")
-  }, [getDisplayText, normalizeText, isPunctuation])
-
-  useEffect(() => {
-    if (!getDisplayText() || !spokenText || !isListening || spokenText === lastProcessedText) return
-    
-    setLastProcessedText(spokenText)
-    const cleanSpokenText = normalizeText(spokenText)
-    const spokenWords = cleanSpokenText.split(' ')
-    const currentSpokenWord = spokenWords[spokenWords.length - 1]
-
-    if (!currentSpokenWord) return
-
-    setWords(prevWords => {
-      const newWords = [...prevWords]
-      const currentWord = prevWords[currentWordIndex]
-
-      if (!currentWord || currentWord.status === 'correct' || currentWord.isPunctuation) {
-        return prevWords
-      }
-
-      const normalizedCurrentWord = normalizeText(currentWord.text)
-      const normalizedSpokenWord = normalizeText(currentSpokenWord)
-      
-      if (difficulty === 'beginner') {
-        // Strict matching for beginner level only
-        const isExactMatch = normalizedCurrentWord === normalizedSpokenWord
-        const confidence = isExactMatch ? 100 : 0
-
-        if (isExactMatch) {
-          currentWord.status = 'correct'
-          currentWord.confidence = confidence
-          const nextIndex = moveToNextWord(newWords, currentWordIndex)
-          setCurrentWordIndex(nextIndex)
-          setStreak(prev => prev + 1)
-          if (streak >= 2) {
-            showRandomFeedback(true)
-          }
-        } else if (currentSpokenWord.length >= 1) {
-          currentWord.status = 'incorrect'
-          currentWord.confidence = 0
-          setStreak(0)
-          showRandomFeedback(false)
-        }
-      } else {
-        // Flexible matching for learning and expert levels
-        const similarWords = similarSoundingWords[normalizedCurrentWord] || []
-        const isSimilarSoundingWord = similarWords.includes(normalizedSpokenWord)
-
-        const distance = levenshteinDistance2(normalizedCurrentWord, normalizedSpokenWord)
-        const confidence = Math.max(0, 100 - (distance * 33.33))
-
-        if (distance <= 1 || isSimilarSoundingWord) {
-          currentWord.status = 'correct'
-          currentWord.confidence = isSimilarSoundingWord ? 100 : confidence
-          const nextIndex = moveToNextWord(newWords, currentWordIndex)
-          setCurrentWordIndex(nextIndex)
-          setStreak(prev => prev + 1)
-          if (streak >= 2) {
-            showRandomFeedback(true)
-          }
-        } else if (currentSpokenWord.length >= currentWord.text.length) {
-          currentWord.status = 'incorrect'
-          currentWord.confidence = confidence
-          setStreak(0)
-          showRandomFeedback(false)
-        } else {
-          currentWord.status = 'current'
-          currentWord.confidence = confidence
-        }
-      }
-
-      return newWords
-    })
-  }, [spokenText, isListening, currentWordIndex, normalizeText, moveToNextWord, difficulty])
-
-  useEffect(() => {
-    const correctWords = words.filter(w => w.status === 'correct').length
-    const totalWords = words.filter(w => !w.isPunctuation).length
-    setProgress(totalWords > 0 ? correctWords / totalWords : 0)
-  }, [words])
-
-  // Styling
-  const getWordStyle = (word: Word) => {
-    const baseStyle = 'px-3 py-2 rounded-lg mx-1 transition-all duration-300 '
-    
-    if (word.isPunctuation) {
-      return baseStyle + (word.status === 'correct' ? 'text-green-500' : 'text-gray-400')
-    }
-    
-    const styles = {
-      current: baseStyle + 'bg-yellow-200 animate-pulse text-black font-bold transform scale-110',
-      correct: baseStyle + 'bg-green-500 text-white',
-      incorrect: baseStyle + 'bg-red-200 text-red-800',
-      waiting: baseStyle + 'hover:bg-gray-100'
-    }
-
-    return styles[word.status]
-  }
-
-  const getConfidenceStyle = (status: 'correct' | 'incorrect') => {
-    const baseStyle = {
-      position: 'absolute' as const,
-      top: '-10px',
-      right: '-10px',
-      fontSize: '0.65em',
-      padding: '2px 6px',
-      borderRadius: '9999px', // Makes it fully rounded
-      fontWeight: 'bold',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      minWidth: '32px',
-      textAlign: 'center' as const,
-      transform: 'scale(0.9)',
-    }
-
-    if (status === 'correct') {
-      return {
-        ...baseStyle,
-        backgroundColor: '#22c55e', // Green
-        color: 'white',
-      }
-    } else {
-      return {
-        ...baseStyle,
-        backgroundColor: '#ef4444', // Red
-        color: 'white',
-      }
-    }
-  }
+    setWords(initialWords);
+    setCurrentWordIndex(firstWordIndex !== -1 ? firstWordIndex : 0);
+    setLastProcessedText("");
+    setProgress(0); // Reset progress when text changes
+  }, [getDisplayText, normalizeText, isPunctuation]);
 
   return (
-    <Card className="w-full max-w-4xl mx-auto shadow-lg relative overflow-hidden">
-      <CardContent className="p-8">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2">
-            {Array.from({ length: Math.min(streak, 5) }).map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="text-yellow-400"
-              >
-                <Star className="w-6 h-6 fill-current" />
-              </motion.div>
-            ))}
+    <div className="relative">
+      <Card className="shadow-sm">
+        <CardContent className="p-4">
+          {/* Control Buttons */}
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              className="text-sm"
+            >
+              <RotateCcw className="w-4 h-4 mr-1" /> Start Over
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSwapText}
+              className="text-sm"
+            >
+              <Star className="w-4 h-4 mr-1" /> Next Text ({textIndex + 1}/{getTextCount(difficulty)})
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReset}
-            className="flex items-center gap-2"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Start Over
-          </Button>
-        </div>
 
-        <AnimatePresence>
-          {showFeedback && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 px-6 py-3 rounded-full shadow-lg text-2xl font-bold text-center z-10"
-            >
-              {feedback}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="text-3xl leading-relaxed text-center font-rounded">
-          {words.map((word, index) => (
-            <motion.span 
-              key={index} 
-              className={getWordStyle(word)}
-              style={{
-                cursor: 'pointer',
-                display: 'inline-block',
-                position: 'relative',
-                margin: '0 4px'
-              }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              {word.text}
-              {!word.isPunctuation && " "}
-              {word.status === 'current' && isListening && !word.isPunctuation && (
-                <motion.span 
-                  className="absolute -bottom-1 left-0 w-full h-1 bg-yellow-400"
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                />
-              )}
-              {(word.status === 'correct' || word.status === 'incorrect') && !word.isPunctuation && (
+          {/* Display Text Area */}
+          <div className="min-h-[150px] flex items-center justify-center">
+            <div className="text-2xl md:text-3xl leading-relaxed tracking-wide font-medium">
+              {words.map((word, index) => (
                 <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-3 right-0 text-xs px-2 py-1 rounded-full font-bold"
-                  style={{
-                    backgroundColor: word.status === 'correct' ? '#22c55e' : '#ef4444',
-                    color: 'white',
-                    fontSize: '0.65em'
-                  }}
+                  key={`${word.text}-${index}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className={`inline-block mx-2 ${
+                    word.status === 'current' ? 'bg-yellow-200 rounded px-2 py-0.5 animate-pulse' :
+                    word.status === 'correct' ? 'text-green-600' :
+                    word.status === 'incorrect' ? 'text-red-600' :
+                    ''
+                  }`}
                 >
-                  {Math.round(word.confidence)}%
+                  {word.text}
                 </motion.span>
-              )}
-            </motion.span>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          {progress > 0 && (
+            <div className="w-full bg-gray-100 rounded-full h-1.5 mt-6">
+              <motion.div
+                className="bg-blue-600 h-1.5 rounded-full"
+                style={{ width: `${progress}%` }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Feedback Message */}
+      <AnimatePresence>
+        {showFeedback && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white px-4 py-2 rounded-full shadow-md text-lg font-medium text-center z-10 whitespace-nowrap"
+          >
+            {feedback}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }

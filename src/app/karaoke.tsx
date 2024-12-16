@@ -20,36 +20,99 @@ function Karaoke() {
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     
     useEffect(() => {
-        // Initialize SpeechRecognition only once when component mounts
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             console.error("Speech recognition is not supported in this browser.");
+            alert("Sorry! Speech recognition is not supported in your browser. Please try using Chrome, Edge, or Safari for the best experience.");
             return;
         }
 
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
         recognition.lang = 'en-US';
 
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-            let transcript = '';
-            const results = event.results;
-            for (let i = 0; i < results.length; i++) {
-                const result = results[i];
-                transcript += result[0].transcript + (result.isFinal ? ' ' : '');
+        // Track initial detection state
+        let isFirstDetection = true;
+        let microphoneInitialized = false;
+
+        // Initialize microphone immediately
+        if (!microphoneInitialized) {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(() => {
+                    microphoneInitialized = true;
+                })
+                .catch(error => console.error('Microphone access error:', error));
+        }
+
+        recognition.onstart = () => {
+            console.log('Recognition started');
+            if (isFirstDetection) {
+                // Force high sensitivity for first detection
+                recognition.interimResults = true;
             }
-            setUserSpeech(transcript.trim());
-        };        
+        };
+
+        recognition.onaudiostart = () => {
+            if (isFirstDetection && microphoneInitialized) {
+                // Quick restart for better initial pickup
+                recognition.stop();
+                requestAnimationFrame(() => {
+                    try {
+                        recognition.start();
+                        isFirstDetection = false;
+                    } catch (e) {
+                        console.error('Quick restart error:', e);
+                    }
+                });
+            }
+        };
+
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+            const result = event.results[event.results.length - 1];
+            if (result) {
+                const bestMatch = Array.from(result)
+                    .sort((a, b) => b.confidence - a.confidence)[0];
+                setUserSpeech(bestMatch.transcript.trim());
+            }
+        };
 
         recognition.onerror = (event: any) => {
             console.error('Speech recognition error:', event.error);
-            setIsListening(false);
+            
+            if (isListening && recognitionRef.current) {
+                if (restartCount < MAX_RESTART_ATTEMPTS) {
+                    const backoffDelay = Math.min(100 * Math.pow(2, restartCount), 1000);
+                    setTimeout(() => {
+                        try {
+                            recognition.start();
+                            restartCount++;
+                        } catch (e) {
+                            console.error('Error in restart attempt:', e);
+                        }
+                    }, backoffDelay);
+                } else {
+                    restartCount = 0;
+                    isFirstDetection = true;
+                    setIsListening(false);
+                }
+            }
         };
 
         recognition.onend = () => {
+            const timeSinceLastResult = Date.now() - lastResultTimestamp;
+            
             if (isListening) {
-                recognition.start();
+                try {
+                    if (timeSinceLastResult > 5000) { 
+                        isFirstDetection = true; 
+                    }
+                    recognition.start();
+                } catch (e) {
+                    console.error('Error restarting:', e);
+                    setIsListening(false);
+                }
             }
         };
 
@@ -64,7 +127,12 @@ function Karaoke() {
 
     const toggleListening = () => {
         if (!isListening) {
-            recognitionRef.current?.start();
+            if (recognitionRef.current) {
+                recognitionRef.current.abort();
+                setTimeout(() => {
+                    recognitionRef.current?.start();
+                }, 100);
+            }
         } else {
             recognitionRef.current?.stop();
         }

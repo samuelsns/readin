@@ -3,12 +3,13 @@
 import React, { useState } from 'react'
 import TextDisplay from './TextDisplay'
 import MicrophoneControl from './MicControl'
-import DifficultySelector, { Difficulty } from './DifficultySelector'
+import DifficultySelector from './DifficultySelector'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mic } from 'lucide-react'
+import { Difficulty } from './DifficultySelector'
 
-interface ReadingComponentProps {
-  textToRead: string;
+export interface ReadingComponentProps {
+  textToRead?: string
 }
 
 export default function ReadingComponent({ textToRead = "" }: ReadingComponentProps) {
@@ -29,37 +30,42 @@ export default function ReadingComponent({ textToRead = "" }: ReadingComponentPr
   }
 
   return (
-    <div className="space-y-6 p-4">
-      <DifficultySelector 
-        currentDifficulty={difficulty}
-        onDifficultyChange={handleDifficultyChange}
-      />
-      <TextDisplay 
-        textToRead={textToRead} 
-        spokenText={spokenText} 
-        isListening={isListening}
-        difficulty={difficulty}
-      />
-      <div className="flex flex-col items-center gap-4">
-        <MicrophoneControl 
-          onSpeechResult={handleSpeechResult}
-          onListeningChange={handleListeningStateChange}
-        />
-        <AnimatePresence mode="wait">
-          {isListening && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-600 font-medium text-lg"
-            >
-              <Mic className="w-4 h-4" />
-              <span>
-                {spokenText || "Listening..."}
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+    <div className="min-h-screen flex flex-col">
+      <div className="flex-1 p-4 w-full">
+        <div className="max-w-[95%] mx-auto">
+          <DifficultySelector 
+            onDifficultyChange={handleDifficultyChange}
+            currentDifficulty={difficulty}
+          />
+          <div className="space-y-4">
+            <TextDisplay 
+              textToRead={textToRead} 
+              spokenText={spokenText}
+              isListening={isListening}
+              difficulty={difficulty}
+            />
+            <div className="relative">
+              <div className="flex justify-center mb-2">
+                <MicrophoneControl 
+                  onSpeechResult={handleSpeechResult}
+                  onListeningChange={handleListeningStateChange}
+                />
+              </div>
+              <AnimatePresence mode="wait">
+                {isListening && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute left-1/2 transform -translate-x-1/2 mt-2 bg-blue-50 px-4 py-2 rounded-full text-sm font-medium text-blue-600 whitespace-nowrap"
+                  >
+                    {spokenText || "Listening..."}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
