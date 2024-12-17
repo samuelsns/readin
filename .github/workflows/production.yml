@@ -18,6 +18,18 @@ jobs:
 
       - name: Setup gcloud CLI
         run: |
+          # Install gcloud CLI if not present
+          if ! command -v gcloud &> /dev/null; then
+            curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-455.0.0-linux-x86_64.tar.gz
+            tar -xf google-cloud-cli-455.0.0-linux-x86_64.tar.gz
+            ./google-cloud-sdk/install.sh --quiet
+            echo "$HOME/google-cloud-sdk/bin" >> $GITHUB_PATH
+          fi
+          
+          # Install beta components and Cloud Run
+          gcloud components install beta cloud-run --quiet
+          
+          # Authenticate and set project
           echo '${{ secrets.GCP_SA_KEY }}' > gcp-key.json
           gcloud auth activate-service-account --key-file=gcp-key.json
           gcloud config set project ${{ env.PROJECT_ID }}
