@@ -1,4 +1,5 @@
-name: Staging Deployment
+# Test workflow with GitHub secrets
+name: Deploy to Staging
 
 on:
   push:
@@ -12,30 +13,43 @@ env:
 
 jobs:
   deploy:
+    name: Deploy to Cloud Run
     runs-on: ubuntu-latest
+    environment: staging
+
     permissions:
       contents: 'read'
       id-token: 'write'
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - id: auth
-        name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v2'
         with:
+          project_id: '${{ secrets.GCP_PROJECT_ID }}'
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
-          token_format: 'access_token'
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: 'google-github-actions/setup-gcloud@v2'
+        with:
+          project_id: '${{ secrets.GCP_PROJECT_ID }}'
 
-      - name: Build and Deploy to Cloud Run
-        run: |
-          gcloud builds submit --tag gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} \
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker
+
+      - name: Build and Push Container
+        run: |-
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/readaoke-staging:${{ github.sha }} .
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/readaoke-staging:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy readaoke-staging \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/readaoke-staging:${{ github.sha }} \
+            --region us-central1 \
             --platform managed \
-            --region ${{ env.REGION }} \
-            --project ${{ env.PROJECT_ID }} \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --set-env-vars="ENVIRONMENT=staging"
